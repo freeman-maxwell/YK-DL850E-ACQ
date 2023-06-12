@@ -84,38 +84,22 @@ class acq:
         if flag:
             try:
                 yk.write(':STOP')
-
                 yk.write(':WAVeform:TRACE ' + channel)
-
                 result = yk.query('WAVEFORM:RECord? MINimum')
                 minRecord = int(extract_number(result))
-
                 yk.write(':WAVeform:RECord ' + str(minRecord))
-
-                result = yk.query('WAVEFORM:RANGE?')
-                dV = extract_number(result)
-
-                result = yk.query('WAVEFORM:OFFSET?')
-                offset = extract_number(result)
-
-                result = yk.query('WAVEFORM:LENGth?')
+                result = yk.query(':WAVEFORM:LENGth?')
                 length = int(extract_number(result))
 
-                result = yk.query('WAVEFORM:TRIGGER?')
-                trigpos = extract_number(result)
+                yk.write(':WAVEFORM:FORMAT WORD')
 
-                yk.write('WAVEFORM:FORMAT WORD')
-
-                result = yk.query('WAVEFORM:BITS?')
-                bitlength = extract_number(result)
-                bitlength = 0x10 if bitlength == 16 else 0x08
-
-                yk.write('WAVEFORM:BYTEORDER LSBFIRST')
+                yk.write(':WAVEFORM:BYTEORDER LSBFIRST')
 
                 yk.write(':WAVeform:FORMat WORD')
 
                 result = yk.query(':WAVeform:SRATe?')  # Get sampling rate
                 sampling_rate = extract_number(result)
+
             except:
                 flag = False
                 messagebox.showerror("Error", "Some bullshit happened!")
@@ -125,18 +109,19 @@ class acq:
                 print("Transferring...", end=" ")
 
             n = int(np.floor(length / chunkSize))
+            print("n = ", n)
             t_data = []
 
             for i in tqdm(range(n + 1)):
                 m = min(length, (i + 1) * chunkSize) - 1
 
-                yk.write("WAVEFORM:START {};:WAVEFORM:END {}".format(i * chunkSize, m))
-                buff = yk.query_binary_values('WAVEFORM:SEND?', datatype='h', container=list)
+                yk.write(":WAVEFORM:START {};:WAVEFORM:END {}".format(i * chunkSize, m))
+                buff = yk.query_binary_values(':WAVEFORM:SEND?', datatype='h', container=list)
 
                 t_data.extend(buff)
                 self.prog = (i + 1) / (n + 1)
 
-            result = yk.query('WAVEFORM:OFFSET?')
+            result = yk.query(':WAVEFORM:OFFSET?')
             offset = extract_number(result)
 
             result = yk.query(':WAVeform:RANGe?')

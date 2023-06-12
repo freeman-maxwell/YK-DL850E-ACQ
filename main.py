@@ -3,10 +3,6 @@ import yk
 import threading
 from datetime import datetime
 from io import BytesIO
-import numpy as np
-import os
-import csv
-
 
 def save_figure_to_bytes(fig):
     # Create a BytesIO object to store the PNG image data
