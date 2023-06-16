@@ -3,6 +3,9 @@ import yk
 import threading
 from datetime import datetime
 from io import BytesIO
+import matplotlib
+matplotlib.use('agg')
+st.set_option('deprecation.showPyplotGlobalUse', False)
 
 def save_figure_to_bytes(fig):
     # Create a BytesIO object to store the PNG image data
@@ -16,9 +19,12 @@ def save_figure_to_bytes(fig):
 
 
 acq = yk.acq()
+#acq.channels = [1]
+acq.xy_mode = 0
+
 if 'runFlag' not in st.session_state:
     st.session_state['runFlag'] = 0
-if 'fig' not in st.session_state:
+if 'figs' not in st.session_state:
     st.session_state['fig'] = None
 if 'data' not in st.session_state:
     st.session_state['data'] = None
@@ -28,54 +34,54 @@ if 'timestamp' not in st.session_state:
 # Create a title
 st.title('Yokogawa DL850E Acquisition GUI')
 
-# Create a dropdown menu
+#Create columns
+col1, col2 = st.columns([1, 1])
+
 options = yk.get_devices()
-selected_option = st.selectbox('Select a device:', options)
+selected_option = col1.selectbox('Select a device:', options)
+
+
+channels = range(1, 9)
+acq.channels = col2.multiselect('Choose Channels:', channels)
 
 # Create a run button
 if st.button('Run'):
     st.session_state['runFlag'] = 0
+    st.session_state['data'] = None
+    st.session_state['fig'] = None
     progress_bar = st.empty()
     instr = selected_option
     acq_thread = threading.Thread(target=acq.run, args=(instr,))  # Pass instr as an argument
     acq_thread.start()  # Start the thread
     while acq_thread.is_alive():
-        progress = acq.get_progress()
-        progress_bar.progress(progress)
+        progress = acq.prog['prog']
+        prog_text = str(acq.prog['iteration']) + '/' + str(len(acq.channels))
+        progress_bar.progress(progress, text=prog_text)
 
     acq_thread.join()
     st.session_state['timestamp'] = datetime.now().strftime("%Y%m%d_%H%M%S")
     progress_bar.empty()
     st.session_state['runFlag'] = 1
 
-initial_plot = st.empty()
-
 # If the run button was pressed, plot the figure
 if st.session_state['runFlag'] == 1:
     with st.spinner('Plotting...'):
         fig = acq.plot()
-        st.session_state['data'] = acq.data
         st.session_state['fig'] = fig
-        initial_plot = st.pyplot(fig)
-
         st.session_state['runFlag'] = 2
 
 # Once plotting is done, save the plot to the session state, and display it, and show save buttons
 if st.session_state['runFlag'] == 2:
-    initial_plot.empty()
-    st.pyplot(st.session_state['fig'])
+    initial_plot = st.empty()
+    fig = st.session_state['fig']
+    initial_plot = st.pyplot(fig)
     csv = acq.get_data()
-    buffer = save_figure_to_bytes(st.session_state['fig'])
+    #print('finished CSV')
+    #buffer = save_figure_to_bytes(st.session_state['figs'])
 
-    col1, col2 = st.columns(2)
-    col1.download_button("Download CSV",
+    st.download_button("Download CSV",
                          csv,
                          file_name=f"{st.session_state['timestamp']}_data.csv",
                          key='download-csv'
                          )
 
-    col2.download_button('Save Plot as PNG',
-                         buffer,
-                         file_name=f"{st.session_state['timestamp']}_fig.png",
-                         key='download-png'
-                         )
