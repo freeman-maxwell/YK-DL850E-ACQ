@@ -130,6 +130,7 @@ class acq:
         yk.close()
 
     def plot(self):
+        figs = []
         if self.xy_mode == 1:
             x = -7.766 * np.array(self.channel_data[1]['t_volt'])
             x = x - np.min(x)
@@ -144,7 +145,51 @@ class acq:
             ax.set_ylabel('Force (N)')
 
         else:
-            fig, axes = plt.subplots(2 * len(self.channels), 1, figsize=(8, 8 * len(self.channels)))
+            for i, (key, data) in enumerate(self.channel_data.items()):
+                # Time Domain Plot
+                t = data['t']
+                t_data = data['t_volt']
+                fig = go.Figure(data=go.Scatter(
+                    x=t,
+                    y=t_data,
+                    mode='lines'))
+                fig.update_layout(
+                    title_text='Time Domain Signal, Channel ' + str(key),
+                    xaxis_title='Time (s)',
+                    yaxis_title='Voltage (V)')
+                figs.append(fig)
+
+                # Frequency Domain Plot
+                f = data['f']
+                psd_data = data['psd_pos']
+
+                x_lim = [0, 6E2]
+                y_lim = []
+                i_xlim = np.argmax(f > 1E3)
+                y_lim.append(1E-1 * np.min(psd_data[0:i_xlim]))
+                y_lim.append(1E1 * np.max(psd_data[0:i_xlim]))
+
+                fig = go.Figure(data=go.Scatter(
+                    x=f,
+                    y=psd_data,
+                    mode='lines'))
+                fig.update_yaxes(type="log")
+                fig.update_layout(
+                    title_text='Time Domain Signal, Channel ' + str(key),
+                    xaxis_title='Frequency (Hz)',
+                    yaxis_title=r'Position PSD ($m/\sqrt{Hz}$)',
+                    xaxis_range=x_lim)
+                figs.append(fig)
+
+
+
+
+            '''x_lim = [0, 6E2]
+                            y_lim = []
+                            i_xlim = np.argmax(f > 1E3)
+                            y_lim.append(1E-1 * np.min(psd_data[0:i_xlim]))
+                            y_lim.append(1E1 * np.max(psd_data[0:i_xlim]))'''
+            '''fig, axes = plt.subplots(2 * len(self.channels), 1, figsize=(8, 8 * len(self.channels)))
             plt.subplots_adjust(hspace=0.4)
 
             for i, (key, data) in enumerate(self.channel_data.items()):
@@ -174,8 +219,8 @@ class acq:
                 ax.set_title('Power Spectral Density, Channel ' + str(key))
                 ax.set_xlim(x_lim[0], x_lim[1])
                 ax.set_ylim(y_lim[0], y_lim[1])
-                ax.semilogy(f, psd_data)
-        return fig
+                ax.semilogy(f, psd_data)'''
+        return figs
 
     def get_data(self):
         csv_string = ""
