@@ -1,19 +1,10 @@
 import pyvisa
 import re
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib
-from plotly.subplots import make_subplots
+import math
 import plotly.graph_objects as go
 import scipy as sc
 from tqdm import tqdm
-from tkinter import messagebox
-from io import StringIO
-import csv
-import pandas as pd
-
-matplotlib.use('agg')
-matplotlib.rcParams['agg.path.chunksize'] = 10000
 
 def extract_number(string):
     pattern = r'[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?'
@@ -26,6 +17,22 @@ def extract_number(string):
         except ValueError:
             pass
     return None
+
+
+def average_reduce(array, factor):
+    if isinstance(array, np.ndarray):
+        array = array.tolist()  # Convert NumPy array to Python list
+
+    reduced_array = []
+    i = 0
+    while i < len(array):
+        chunk = array[i:i + factor]
+        if chunk:
+            average = sum(chunk) / len(chunk)
+            reduced_array.append(average)
+        i += factor
+    return reduced_array
+
 
 def get_devices():
     try:
@@ -42,7 +49,8 @@ class acq:
         self.chunkSize = int(1E5)
         self.channels = [1]
         self.channel_data = {}
-        self.xy_mode = None
+        self.mode = ['time domain']
+        self.amp_gain = 1
 
     def run(self, instr):
 
@@ -62,7 +70,6 @@ class acq:
             flag = False
 
         yk.write(':STOP')
-        #self.xy_mode = extract_number(yk.query(':XY:WINDOW1:MODE?'))
         yk.write(':WAVEFORM:FORMAT WORD')
         yk.write(':WAVEFORM:BYTEORDER LSBFIRST')
         yk.write(':WAVeform:FORMat WORD')
@@ -105,11 +112,14 @@ class acq:
 
                     t_data = w_range * np.array(
                         t_data) * 10 / 24000 + offset  # some random bullshit formula in the communication manual
-                    data['t_volt'] = t_data
-                    data['t'] = np.arange(len(t_data)) / sampling_rate
 
-                    if self.xy_mode != 1:
-                        data['t_acc'] = 9.81 / 10 * t_data  # /100
+                    if 'time domain' or 'X vs Y' in self.mode:
+                        data['t_volt'] = t_data
+                        if 'time domain' in self.mode:
+                            data['t'] = np.arange(len(t_data)) / sampling_rate
+
+                    if 'frequency domain' in self.mode:
+                        data['t_acc'] = (9.81 / 10) * t_data / self.amp_gain
                         freq, psd_acc = sc.signal.welch(data['t_acc'],
                                                         fs=sampling_rate,
                                                         nperseg=sampling_rate,
@@ -120,6 +130,7 @@ class acq:
                         psd_acc = psd_acc[1:-1]
 
                         data['f'] = freq
+
                         data['psd_acc'] = psd_acc
                         data['psd_pos'] = psd_acc / freq ** 2
                     self.channel_data[channel] = data
@@ -131,20 +142,7 @@ class acq:
 
     def plot(self):
         figs = []
-        if self.xy_mode == 1:
-            x = -7.766 * np.array(self.channel_data[1]['t_volt'])
-            x = x - np.min(x)
-            self.channel_data[1]['t_volt'] = x
-            y = 4.108 * (np.array(self.channel_data[3]['t_volt']) - 4.547)
-            self.channel_data[3]['t_volt'] = y
-
-            fig, ax = plt.subplots()
-            ax.plot(x, y)
-            ax.set_title('Force vs Distance')
-            ax.set_xlabel('Distance (mm)')
-            ax.set_ylabel('Force (N)')
-
-        else:
+        if 'time domain' in self.mode:
             for i, (key, data) in enumerate(self.channel_data.items()):
                 # Time Domain Plot
                 t = data['t']
@@ -159,6 +157,8 @@ class acq:
                     yaxis_title='Voltage (V)')
                 figs.append(fig)
 
+        if 'frequency domain' in self.mode:
+            for i, (key, data) in enumerate(self.channel_data.items()):
                 # Frequency Domain Plot
                 f = data['f']
                 psd_data = data['psd_pos']
@@ -168,87 +168,42 @@ class acq:
                 i_xlim = np.argmax(f > 1E3)
                 y_lim.append(1E-1 * np.min(psd_data[0:i_xlim]))
                 y_lim.append(1E1 * np.max(psd_data[0:i_xlim]))
+                log_y_lim = [math.log10(bound) for bound in y_lim]
 
                 fig = go.Figure(data=go.Scatter(
                     x=f,
                     y=psd_data,
                     mode='lines'))
-                fig.update_yaxes(type="log")
                 fig.update_layout(
-                    title_text='Time Domain Signal, Channel ' + str(key),
+                    title='Frequency Domain Signal, Channel ' + str(key),
                     xaxis_title='Frequency (Hz)',
-                    yaxis_title=r'Position PSD ($m/\sqrt{Hz}$)',
-                    xaxis_range=x_lim)
+                    yaxis_title='Position PSD (m/√Hz)',
+                    xaxis_range=x_lim,
+                    yaxis_range=log_y_lim
+                )
+                fig.update_yaxes(type="log")
                 figs.append(fig)
 
+        if 'X vs Y' in self.mode:
+            x = -7.766 * np.array(self.channel_data[self.channels[0]]['t_volt'])
+            x = x - np.min(x)
+            self.channel_data[self.channels[0]]['distance (mm)'] = x
+            self.channel_data[self.channels[0]]['force (N)'] = []
+            y = 4.108 * (np.array(self.channel_data[self.channels[1]]['t_volt']) - 4.547)
+            self.channel_data[self.channels[1]]['force (N)'] = y
+            self.channel_data[self.channels[1]]['distance (mm)'] = []
 
-
-
-            '''x_lim = [0, 6E2]
-                            y_lim = []
-                            i_xlim = np.argmax(f > 1E3)
-                            y_lim.append(1E-1 * np.min(psd_data[0:i_xlim]))
-                            y_lim.append(1E1 * np.max(psd_data[0:i_xlim]))'''
-            '''fig, axes = plt.subplots(2 * len(self.channels), 1, figsize=(8, 8 * len(self.channels)))
-            plt.subplots_adjust(hspace=0.4)
-
-            for i, (key, data) in enumerate(self.channel_data.items()):
-                i = 2 * i
-                ax = axes[i]
-                t = data['t']
-                t_data = data['t_volt']
-                ax.plot(t, t_data)
-                ax.set_title('Time Domain Signal, Channel ' + str(key))
-                ax.set_xlabel('time (s)')
-                ax.set_ylabel('Voltage (V)')
-
-                print(i + 1)
-                ax = axes[i + 1]
-
-                x_lim = [0, 6E2]
-                y_lim = []
-                f = data['f']
-                psd_data = data['psd_pos']
-
-                i_xlim = np.argmax(f > 1E3)
-                y_lim.append(1E-1 * np.min(psd_data[0:i_xlim]))
-                y_lim.append(1E1 * np.max(psd_data[0:i_xlim]))
-
-                ax.set_xlabel('Frequency (Hz)')
-                ax.set_ylabel(r'Position PSD ($m/\sqrt{Hz}$)')
-                ax.set_title('Power Spectral Density, Channel ' + str(key))
-                ax.set_xlim(x_lim[0], x_lim[1])
-                ax.set_ylim(y_lim[0], y_lim[1])
-                ax.semilogy(f, psd_data)'''
+            x_reduced = average_reduce(x, 100)
+            y_reduced = average_reduce(y, 100)
+            fig = go.Figure(data=go.Scatter(
+                x=x_reduced,
+                y=y_reduced,
+                mode='lines'))
+            fig.update_layout(
+                title_text='Force vs Distance',
+                xaxis_title='Distance (mm)',
+                yaxis_title='Force (N)')
+            figs.append(fig)
         return figs
-
-    def get_data(self):
-        csv_string = ""
-
-        # Extract all unique keys from the nested dictionaries
-        nested_keys = set()
-        for channel_dict in self.channel_data.values():
-            if channel_dict is not None:
-                nested_keys.update(channel_dict.keys())
-        nested_keys = list(nested_keys)
-        nested_keys.reverse()
-
-        # Write the header row
-        headers = [f'C{channel} {key}' for channel in self.channel_data.keys() for key in nested_keys]
-        csv_string += ','.join(headers) + '\n'
-
-        # Write the data rows
-        max_data_length = max([len(channel_dict[key]) for channel_dict in self.channel_data.values() for key in nested_keys])
-        for i in range(max_data_length):
-            row = []
-            for channel in self.channel_data.keys():
-                channel_dict = self.channel_data[channel]
-                for key in nested_keys:
-                    channel_data_array = channel_dict.get(key, np.array([]))
-                    data = channel_data_array[i] if i < len(channel_data_array) else np.nan
-                    row.append(data)
-            csv_string += ','.join([str(value) for value in row]) + '\n'
-
-        return csv_string
 
 
