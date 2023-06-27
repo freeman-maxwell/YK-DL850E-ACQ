@@ -65,18 +65,20 @@ def plot_figs(timestamp):
 st.title('Yokogawa DL850E Acquisition GUI')
 
 # Create columns for dropdown
-dd_col1, dd_col2, dd_col3 = st.columns([1, 1, 1.5])
+dd_col1, dd_col2 = st.columns([1, 1])
 
 options = yk.get_devices()
-selected_option = dd_col1.selectbox('Select a device:', options)
+selected_option = dd_col1.selectbox('**Select a device:**', options)
 
 channels = range(1, 9)
-selected_channels = dd_col2.multiselect('Choose channels:', channels)
+selected_channels = dd_col2.multiselect('**Choose channels:**', channels)
 
-modes = ['time domain', 'frequency domain', 'X vs Y']
-selected_mode = dd_col3.multiselect('Choose plot types:', modes)
+dd_col3, dd_col4 = st.columns([2, 1])
 
-gain = st.number_input('Amplifier Gain',
+modes = ['time domain', 'frequency domain', 'X vs Y', 'resonance']
+selected_mode = dd_col3.multiselect('**Choose plot types:**', modes)
+
+gain = dd_col4.number_input('**Amplifier Gain:**',
                        min_value=0,
                        value=1)
 

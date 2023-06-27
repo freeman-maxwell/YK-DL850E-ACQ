@@ -34,6 +34,10 @@ def average_reduce(array, factor):
     return reduced_array
 
 
+def damping_func(t, A, l, w, p):
+    return A * np.exp(-1 * l * t) * np.cos(w * t - p)
+
+
 def get_devices():
     try:
         rm = pyvisa.ResourceManager()
@@ -113,26 +117,22 @@ class acq:
                     t_data = w_range * np.array(
                         t_data) * 10 / 24000 + offset  # some random bullshit formula in the communication manual
 
-                    if 'time domain' or 'X vs Y' in self.mode:
+                    if 'time domain' or 'X vs Y' or 'resonance' in self.mode:
                         data['t_volt'] = t_data
-                        if 'time domain' in self.mode:
+                        if 'time domain' or 'resonance' in self.mode:
                             data['t'] = np.arange(len(t_data)) / sampling_rate
 
-                    if 'frequency domain' in self.mode:
+                    if 'frequency domain' or 'resonance' in self.mode:
                         data['t_acc'] = (9.81 / 10) * t_data / self.amp_gain
-                        freq, psd_acc = sc.signal.welch(data['t_acc'],
-                                                        fs=sampling_rate,
-                                                        nperseg=sampling_rate,
-                                                        window='blackman',
-                                                        noverlap=0
-                                                        )
-                        freq = freq[1:-1]
-                        psd_acc = psd_acc[1:-1]
+                        if 'frequency domain' in self.mode:
+                            freq, psd_acc = sc.signal.periodogram(data['t_acc'], fs=sampling_rate)
+                                # sc.signal.welch(data['t_acc'],fs=sampling_rate,nperseg=sampling_rate,window='blackman',noverlap=0)
+                            freq = freq[1:-1]
+                            psd_acc = psd_acc[1:-1]
 
-                        data['f'] = freq
-
-                        data['psd_acc'] = psd_acc
-                        data['psd_pos'] = psd_acc / freq ** 2
+                            data['f'] = freq
+                            data['psd_acc'] = psd_acc
+                            data['psd_pos'] = psd_acc / freq ** 2
                     self.channel_data[channel] = data
                 except:
                     flag = False
@@ -182,6 +182,34 @@ class acq:
                     yaxis_range=log_y_lim
                 )
                 fig.update_yaxes(type="log")
+                figs.append(fig)
+
+        if 'resonance' in self.mode:
+            for i, (key, data) in enumerate(self.channel_data.items()):
+                # Time Domain Plot
+                t = data['t']
+                t_data = data['t_acc']
+                popt, pcov = sc.optimize.curve_fit(damping_func, t, t_data)
+                [A, l, w, p] = popt
+                zeta = l / np.sqrt(l ** 2 + w ** 2)
+                delta = 2 * 3.1416 * zeta / np.sqrt(1 - zeta ** 2)
+                t_fit = damping_func(t, A, l, w, p)
+                data_trace = go.Scatter(
+                    x=t,
+                    y=t_data,
+                    mode='lines')
+                fit_trace = go.Scatter(
+                    x=t,
+                    y=t_fit,
+                    mode='lines')
+                fig = go.Figure(data=[data_trace, fit_trace])
+                titlestring = 'Resonance Measurement of QZS Flexure Component, Channel ' + str(key) + '<br>'
+                titlestring += r'fit to $y = A \exp{-\lambda t} \cos{\omega t - \varphi}$' + '<br>'
+                titlestring += r"$A = ${:.5g}, $\lambda = ${:.5g}, $\omega = ${:.5g}, $\varphi = ${:.5g}, $\delta = ${:.5g}".format(A, l, w, p, delta)
+                fig.update_layout(
+                    title_text=titlestring,
+                    xaxis_title='Time (s)',
+                    yaxis_title='Acceleration (m/s^2)')
                 figs.append(fig)
 
         if 'X vs Y' in self.mode:
