@@ -21,7 +21,7 @@ matplotlib.rcParams.update({'font.size': 8})
 chunkSize = int(1E5)
 channel = str(1)
 
-plotType = ['resonance'] #'resonance', 'timeandfreq'
+plotType = ['timeandfreq'] #'resonance', 'timeandfreq'
 
 def damping_func(t, A, l, w, p):
     return A * np.exp(-1 * l * t) * np.cos(w * t - p)
@@ -79,8 +79,8 @@ def plot_arrays(time, timeData, freq, psdData):
         ylim = []
 
         i_xlim = np.argmax(freq > 1E3)
-        ylim.append(1E-1 * np.min(psdData[0:i_xlim]))
-        ylim.append(1E1 * np.max(psdData[0:i_xlim]))
+        #ylim.append(1E-1 * np.min(psdData[0:i_xlim]))
+        #ylim.append(1E1 * np.max(psdData[0:i_xlim]))
 
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 8))
 
@@ -93,7 +93,7 @@ def plot_arrays(time, timeData, freq, psdData):
         ax2.set_ylabel(r'Position PSD $m/\sqrt{Hz}$')
         ax2.set_title('Power Spectral Density')
         ax2.set_xlim(xlim[0], xlim[1])
-        ax2.set_ylim(ylim[0], ylim[1])
+        # ax2.set_ylim(ylim[0], ylim[1])
         ax2.semilogy(freq, psdData)
 
         # Adjust the spacing between subplots

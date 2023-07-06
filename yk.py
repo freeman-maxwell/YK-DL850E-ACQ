@@ -179,7 +179,7 @@ class acq:
                     xaxis_title='Frequency (Hz)',
                     yaxis_title='Position PSD (m/√Hz)',
                     xaxis_range=x_lim,
-                    yaxis_range=log_y_lim
+                    #yaxis_range=log_y_lim
                 )
                 fig.update_yaxes(type="log")
                 figs.append(fig)
@@ -191,6 +191,7 @@ class acq:
                 t_data = data['t_acc']
                 popt, pcov = sc.optimize.curve_fit(damping_func, t, t_data)
                 [A, l, w, p] = popt
+                fn = w / (2 * math.pi)
                 zeta = l / np.sqrt(l ** 2 + w ** 2)
                 delta = 2 * 3.1416 * zeta / np.sqrt(1 - zeta ** 2)
                 t_fit = damping_func(t, A, l, w, p)
@@ -204,8 +205,8 @@ class acq:
                     mode='lines')
                 fig = go.Figure(data=[data_trace, fit_trace])
                 titlestring = 'Resonance Measurement of QZS Flexure Component, Channel ' + str(key) + '<br>'
-                titlestring += r'fit to $y = A \exp{-\lambda t} \cos{\omega t - \varphi}$' + '<br>'
-                titlestring += r"$A = ${:.5g}, $\lambda = ${:.5g}, $\omega = ${:.5g}, $\varphi = ${:.5g}, $\delta = ${:.5g}".format(A, l, w, p, delta)
+                #titlestring += r'fit to $y = A \exp{-\lambda t} \cos{\omega t - \varphi}$' + '<br>'
+                titlestring += r"A={:.5g}, l={:.5g}, w={:.5g}, fn={:.5g} p={:.5g}, d={:.5g}".format(A, l, w, fn, p, delta)
                 fig.update_layout(
                     title_text=titlestring,
                     xaxis_title='Time (s)',
