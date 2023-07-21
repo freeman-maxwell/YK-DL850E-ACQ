@@ -67,11 +67,9 @@ class acq:
         for channel in self.channels:
             self.channel_data[channel] = None
 
-        try:
-            rm = pyvisa.ResourceManager()
-            yk = rm.open_resource(str(instr))
-        except:
-            flag = False
+        rm = pyvisa.ResourceManager()
+        # resources = rm.list_resources()
+        yk = rm.open_resource(instr)
 
         yk.write(':STOP')
         yk.write(':WAVEFORM:FORMAT WORD')
@@ -80,62 +78,57 @@ class acq:
 
         for channel in self.channels:
             if flag:
-                try:
-                    yk.write(':WAVeform:TRACE ' + str(channel))
-                    result = yk.query('WAVEFORM:RECord? MINimum')
-                    min_record = int(extract_number(result))
-                    yk.write(':WAVeform:RECord ' + str(min_record))
-                    result = yk.query(':WAVEFORM:LENGth?')
-                    length = int(extract_number(result))
-                    result = yk.query(':WAVeform:SRATe?')  # Get sampling rate
-                    sampling_rate = extract_number(result)
-                except:
-                    flag = False
+                yk.write(':WAVeform:TRACE ' + str(channel))
+                result = yk.query('WAVEFORM:RECord? MINimum')
+                min_record = int(extract_number(result))
+                yk.write(':WAVeform:RECord ' + str(min_record))
+                result = yk.query(':WAVEFORM:LENGth?')
+                length = int(extract_number(result))
+                result = yk.query(':WAVeform:SRATe?')  # Get sampling rate
+                sampling_rate = extract_number(result)
 
             if flag:
-                try:
-                    data = {}
 
-                    n = int(np.floor(length / self.chunkSize))
-                    t_data = []
+                data = {}
 
-                    for i in tqdm(range(n + 1)):
-                        m = min(length, (i + 1) * self.chunkSize) - 1
+                n = int(np.floor(length / self.chunkSize))
+                t_data = []
 
-                        yk.write(":WAVEFORM:START {};:WAVEFORM:END {}".format(i * self.chunkSize, m))
-                        buff = yk.query_binary_values(':WAVEFORM:SEND?', datatype='h', container=list)
+                for i in tqdm(range(n + 1)):
+                    m = min(length, (i + 1) * self.chunkSize) - 1
 
-                        t_data.extend(buff)
-                        self.prog['prog'] = (i + 1) / (n + 1)
+                    yk.write(":WAVEFORM:START {};:WAVEFORM:END {}".format(i * self.chunkSize, m))
+                    buff = yk.query_binary_values(':WAVEFORM:SEND?', datatype='h', container=list)
 
-                    result = yk.query(':WAVEFORM:OFFSET?')
-                    offset = extract_number(result)
+                    t_data.extend(buff)
+                    self.prog['prog'] = (i + 1) / (n + 1)
 
-                    result = yk.query(':WAVeform:RANGe?')
-                    w_range = extract_number(result)
+                result = yk.query(':WAVEFORM:OFFSET?')
+                offset = extract_number(result)
 
-                    t_data = w_range * np.array(
-                        t_data) * 10 / 24000 + offset  # some random bullshit formula in the communication manual
+                result = yk.query(':WAVeform:RANGe?')
+                w_range = extract_number(result)
 
-                    if 'time domain' or 'X vs Y' or 'resonance' in self.mode:
-                        data['t_volt'] = t_data
-                        if 'time domain' or 'resonance' in self.mode:
-                            data['t'] = np.arange(len(t_data)) / sampling_rate
+                t_data = w_range * np.array(
+                    t_data) * 10 / 24000 + offset  # some random bullshit formula in the communication manual
 
-                    if 'frequency domain' or 'resonance' in self.mode:
-                        data['t_acc'] = (9.81 / 10) * t_data / self.amp_gain
-                        if 'frequency domain' in self.mode:
-                            freq, psd_acc = sc.signal.periodogram(data['t_acc'], fs=sampling_rate)
-                                # sc.signal.welch(data['t_acc'],fs=sampling_rate,nperseg=sampling_rate,window='blackman',noverlap=0)
-                            freq = freq[1:-1]
-                            psd_acc = psd_acc[1:-1]
+                if 'time domain' or 'X vs Y' or 'resonance' in self.mode:
+                    data['t_volt'] = t_data
+                    if 'time domain' or 'resonance' in self.mode:
+                        data['t'] = np.arange(len(t_data)) / sampling_rate
 
-                            data['f'] = freq
-                            data['psd_acc'] = psd_acc
-                            data['psd_pos'] = psd_acc / freq ** 2
-                    self.channel_data[channel] = data
-                except:
-                    flag = False
+                if 'frequency domain' or 'resonance' in self.mode:
+                    data['t_acc'] = (9.81 / 10) * t_data / self.amp_gain
+                    if 'frequency domain' in self.mode:
+                        freq, psd_acc = sc.signal.periodogram(data['t_acc'], fs=sampling_rate)
+                            # sc.signal.welch(data['t_acc'],fs=sampling_rate,nperseg=sampling_rate,window='blackman',noverlap=0)
+                        freq = freq[1:-1]
+                        psd_acc = psd_acc[1:-1]
+
+                        data['f'] = freq
+                        data['psd_acc'] = psd_acc
+                        data['psd_pos'] = psd_acc / freq ** 2
+                self.channel_data[channel] = data
             self.prog['iteration'] += 1
             print('Channel completed')
         yk.close()

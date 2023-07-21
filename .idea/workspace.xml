@@ -5,10 +5,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="a5c5aed3-ac35-42cc-bcdb-476e2b2b5677" name="Changes" comment="added amplifier gain functionality">
-      <change afterPath="$PROJECT_DIR$/YK-DL850E-ACQ-Transf.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/tf.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/YK-DL850E-ACQ.py" beforeDir="false" afterPath="$PROJECT_DIR$/YK-DL850E-ACQ.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tf.py" beforeDir="false" afterPath="$PROJECT_DIR$/tf.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/yk.py" beforeDir="false" afterPath="$PROJECT_DIR$/yk.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
