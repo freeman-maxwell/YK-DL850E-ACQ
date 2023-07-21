@@ -235,8 +235,8 @@ class tf:
 
 
 frequency = np.logspace(0, 2, num=300)
-iterations = [3 if freq > 4 else 3 for freq in frequency]
-time_divisions = ['2s' if freq < 2 else '500ms' if freq < 20 else '200ms' for freq in frequency]
+iterations = [2 if freq > 4 else 2 for freq in frequency]
+time_divisions = ['2s' if freq < 2 else '500ms' if freq < 10 else '200ms' for freq in frequency]
 
 tf = tf()
 tf.open_instruments()
